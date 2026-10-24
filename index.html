@@ -114,10 +114,10 @@ function render() {
     <h1 class="center">Chào Elizabeth!</h1><p class="center">Cấp 1 · Hà Nội · <b>Bài 1: Gặp khách lần đầu</b></p>
     <p class="center vi">Hôm nay chị sẽ tự giới thiệu với anh Tanaka từ Tokyo.</p><div class="spacer"></div>
     <button class="b1" id="n">Bắt đầu 🚀</button>`;
-  if (s === 'video') app.innerHTML = `${bar()}<h2>🎬 Xem: người ta tự giới thiệu thế nào</h2>
-    <div class="yt"><iframe src="https://www.youtube.com/embed/5whkCF7TgZ0?start=0&end=90&playsinline=1&rel=0&cc_load_policy=1" allow="autoplay; encrypted-media" allowfullscreen></iframe></div>
+  if (s === 'video') app.innerHTML = `${bar()}<h2>🎬 Xem 15 giây</h2>
+    <div class="yt"><iframe src="https://www.youtube.com/embed/5whkCF7TgZ0?start=0&end=15&playsinline=1&rel=0&cc_load_policy=1" allow="autoplay; encrypted-media" allowfullscreen></iframe></div>
     <p class="vi">Chỉ cần nghe cho quen tai, chưa cần hiểu hết.</p><div class="spacer"></div>
-    <button class="b1" id="n">Xem xong → Nói theo</button>`;
+    <button class="b1" id="n">Tiếp → Nói theo</button>`;
   if (s === 'repeat') { const t = SENTENCES[si];
     app.innerHTML = `${bar()}<h2>🗣️ Nói theo (${si + 1}/${SENTENCES.length})</h2>
     <div class="card"><div class="en">${t.en}</div><div class="vi">${t.vi}</div>
