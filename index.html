@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="vi"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#16a34a">
+<title>Elizabeth English (thử)</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f6f7f9;color:#1f2937}
+.app{max-width:480px;margin:0 auto;min-height:100vh;padding:16px;display:flex;flex-direction:column}
+.top{display:flex;justify-content:space-between;font-weight:700;font-size:15px;margin-bottom:10px}
+.prog{height:10px;background:#e5e7eb;border-radius:6px;overflow:hidden;margin-bottom:18px}.prog i{display:block;height:100%;background:#22c55e;width:0;transition:width .4s}
+h1{font-size:24px;margin:8px 0}h2{font-size:20px;margin:6px 0 12px}
+.card{background:#fff;border-radius:18px;padding:18px;box-shadow:0 2px 8px #0001;margin-bottom:14px}
+.en{font-size:24px;font-weight:800;margin:6px 0}.vi{color:#6b7280;font-size:15px}
+.row{display:flex;gap:10px;margin-top:14px}
+button{font:inherit;border:0;border-radius:14px;padding:14px;font-weight:700;font-size:17px;cursor:pointer}
+.b1{background:#22c55e;color:#fff;flex:1}.b2{background:#e5e7eb;flex:1}.b3{background:#fff;border:2px solid #e5e7eb;color:#6b7280;flex:1;font-size:14px}
+.mic{width:96px;height:96px;border-radius:50%;background:#ef4444;color:#fff;font-size:40px;display:block;margin:16px auto 6px}
+.mic.on{animation:p 1s infinite}@keyframes p{50%{transform:scale(1.1);box-shadow:0 0 0 12px #ef444433}}
+.fb{text-align:center;min-height:48px;font-size:16px;margin-top:6px}.ok{color:#16a34a;font-weight:700}.no{color:#dc2626}
+.yt{position:relative;padding-top:56.25%;border-radius:14px;overflow:hidden;background:#000}.yt iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.bub{padding:12px 14px;border-radius:16px;margin:8px 0;max-width:85%;font-size:16px}.them{background:#e0e7ff}.me{background:#dcfce7;margin-left:auto}
+.big{font-size:72px;text-align:center}.timer{font-size:40px;font-weight:800;color:#f97316;text-align:center}
+.center{text-align:center}.hint{color:#9ca3af;font-size:14px;text-align:center}
+.spacer{flex:1}
+.conf{position:fixed;top:-20px;font-size:24px;animation:f 2.5s linear forwards;pointer-events:none}@keyframes f{to{transform:translateY(110vh) rotate(720deg)}}
+</style></head><body><div class="app" id="app"></div>
+<script>
+const $ = s => document.querySelector(s);
+const store = { get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d } catch { return d } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)) } catch {} } };
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let xp = 0, step = 0, combo = 0;
+
+// ---- content (spike: inline; the real app reads this from the content library) ----
+const SENTENCES = [
+  { en: 'Hello, nice to meet you.', vi: 'Xin chào, rất vui được gặp anh/chị.' },
+  { en: "I'm Elizabeth.", vi: 'Tôi là Elizabeth.' },
+  { en: "I'm from Team Fortune.", vi: 'Tôi đến từ Team Fortune.' },
+  { en: 'We make toys in Vietnam.', vi: 'Chúng tôi sản xuất đồ chơi tại Việt Nam.' },
+];
+const REFLEX = [
+  { pic: '🤝', q: 'Nice to meet you!', expect: 'nice to meet you too', vi: 'Khách: "Rất vui được gặp chị!"' },
+  { pic: '🙋', q: "What's your name?", expect: "i'm elizabeth", vi: 'Khách hỏi tên chị' },
+  { pic: '🏭', q: 'What does your company do?', expect: 'we make toys', vi: 'Khách hỏi công ty làm gì' },
+];
+const BOT = [
+  { say: "Hello! I'm Ken Tanaka from Tokyo. What's your name?", expect: ['elizabeth'], hint: "I'm Elizabeth." },
+  { say: 'Nice to meet you, Elizabeth. Which company are you from?', expect: ['team fortune', 'fortune'], hint: "I'm from Team Fortune." },
+  { say: 'Great. And what does Team Fortune do?', expect: ['toy', 'toys'], hint: 'We make toys in Vietnam.' },
+  { say: "Wonderful! I'd love to visit your factory.", expect: null },
+];
+const STEPS = ['intro', 'video', 'repeat', 'reflex', 'bot', 'done'];
+
+// ---- helpers ----
+function speak(text, rate = 0.9) {
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text); u.lang = 'en-US'; u.rate = rate;
+  speechSynthesis.speak(u);
+}
+const norm = s => s.toLowerCase().replace(/[^a-z' ]/g, ' ').replace(/\s+/g, ' ').trim();
+// lenient: pass if >= 60% of expected words were heard
+function match(heard, expected) {
+  const h = new Set(norm(heard).split(' ')), e = norm(expected).split(' ');
+  return e.filter(w => h.has(w)).length / e.length >= 0.6;
+}
+function listen(onText, onFail) {
+  if (!SR) return onFail('no-sr');
+  const r = new SR(); r.lang = 'en-US'; r.interimResults = false; r.maxAlternatives = 3;
+  let got = false;
+  r.onresult = e => { got = true; onText([...e.results[0]].map(a => a.transcript).join(' | ')) };
+  r.onerror = e => onFail(e.error);
+  r.onend = () => { if (!got) onFail('no-speech') };
+  r.start();
+  return r;
+}
+function addXp(n) { xp += n; render(); }
+function bar() { return `<div class="top"><span>🔥 ${store.get('streak', 0)} ngày</span><span>⭐ ${xp} XP</span></div>
+  <div class="prog"><i style="width:${step / (STEPS.length - 1) * 100}%"></i></div>`; }
+function go() { step++; render(); }
+function confetti() { for (let i = 0; i < 40; i++) { const c = document.createElement('div'); c.className = 'conf';
+  c.textContent = ['🎉', '⭐', '✨', '🎊'][i % 4]; c.style.left = Math.random() * 100 + 'vw'; c.style.animationDelay = Math.random() + 's';
+  document.body.appendChild(c); setTimeout(() => c.remove(), 4000); } }
+
+// mic widget used by repeat / reflex / bot
+function micWidget(expected, onPass, fbId = 'fb') {
+  return `<button class="mic" id="mic">🎤</button><div class="fb" id="${fbId}">Bấm micro rồi nói</div>
+  <div class="row"><button class="b3" id="self">Tôi đã nói được ✋</button></div>`;
+}
+function wireMic(expected, onPass) {
+  const fb = $('#fb'), mic = $('#mic');
+  mic.onclick = () => {
+    mic.classList.add('on'); fb.textContent = 'Đang nghe…';
+    listen(text => {
+      mic.classList.remove('on');
+      const ok = [].concat(expected).some(e => text.split(' | ').some(t => match(t, e)));
+      if (ok) { fb.innerHTML = `<span class="ok">✔ Tuyệt! Nghe được: "${text.split(' | ')[0]}"</span>`; setTimeout(onPass, 900); }
+      else fb.innerHTML = `<span class="no">Gần đúng rồi! App nghe: "${text.split(' | ')[0]}"</span><br>Thử lại hoặc bấm "Tôi đã nói được"`;
+    }, err => {
+      mic.classList.remove('on');
+      fb.innerHTML = err === 'no-sr' ? 'Máy chưa hỗ trợ nhận giọng — nói to rồi bấm "Tôi đã nói được"'
+        : err === 'not-allowed' ? 'Cần cho phép micro trong trình duyệt' : 'Chưa nghe rõ, thử lại nhé';
+    });
+  };
+  $('#self').onclick = onPass;
+}
+
+// ---- screens ----
+let si = 0;
+function render() {
+  const s = STEPS[step], app = $('#app');
+  if (s === 'intro') app.innerHTML = `${bar()}<div class="spacer"></div><div class="big">🏭👩‍💼</div>
+    <h1 class="center">Chào Elizabeth!</h1><p class="center">Cấp 1 · Hà Nội · <b>Bài 1: Gặp khách lần đầu</b></p>
+    <p class="center vi">Hôm nay chị sẽ tự giới thiệu với anh Tanaka từ Tokyo.</p><div class="spacer"></div>
+    <button class="b1" id="n">Bắt đầu 🚀</button>`;
+  if (s === 'video') app.innerHTML = `${bar()}<h2>🎬 Xem: người ta tự giới thiệu thế nào</h2>
+    <div class="yt"><iframe src="https://www.youtube.com/embed/5whkCF7TgZ0?start=0&end=90&playsinline=1&rel=0&cc_load_policy=1" allow="autoplay; encrypted-media" allowfullscreen></iframe></div>
+    <p class="vi">Chỉ cần nghe cho quen tai, chưa cần hiểu hết.</p><div class="spacer"></div>
+    <button class="b1" id="n">Xem xong → Nói theo</button>`;
+  if (s === 'repeat') { const t = SENTENCES[si];
+    app.innerHTML = `${bar()}<h2>🗣️ Nói theo (${si + 1}/${SENTENCES.length})</h2>
+    <div class="card"><div class="en">${t.en}</div><div class="vi">${t.vi}</div>
+    <div class="row"><button class="b2" id="l">🔊 Nghe</button><button class="b2" id="sl">🐢 Chậm</button></div></div>
+    ${micWidget()}`;
+    $('#l').onclick = () => speak(t.en); $('#sl').onclick = () => speak(t.en, 0.55); speak(t.en);
+    wireMic(t.en, () => { xp += 10; si++; if (si >= SENTENCES.length) { si = 0; go(); } else render(); });
+    return; }
+  if (s === 'reflex') { const t = REFLEX[si];
+    app.innerHTML = `${bar()}<h2>⚡ Phản xạ (${si + 1}/${REFLEX.length}) ${combo > 1 ? '· Combo x' + combo : ''}</h2>
+    <div class="big">${t.pic}</div><p class="center vi">${t.vi}</p><p class="center en" style="font-size:20px">"${t.q}"</p>
+    <div class="timer" id="tm">5</div>${micWidget()}<p class="hint" id="h"></p>`;
+    speak(t.q); let n = 5, fast = true;
+    const tm = setInterval(() => { n--; $('#tm') && ($('#tm').textContent = Math.max(n, 0));
+      if (n <= 0) { clearInterval(tm); fast = false; $('#h') && ($('#h').textContent = 'Gợi ý: ' + t.expect); } }, 1000);
+    wireMic(t.expect, () => { clearInterval(tm); combo = fast ? combo + 1 : 0; xp += 10 * Math.max(1, combo);
+      si++; if (si >= REFLEX.length) { si = 0; go(); } else render(); });
+    return; }
+  if (s === 'bot') { const log = store.get('_log', []);
+    const t = BOT[si];
+    app.innerHTML = `${bar()}<h2>💬 Nói chuyện với anh Tanaka 🇯🇵</h2><div id="chat">${log.map(m => `<div class="bub ${m.who}">${m.text}</div>`).join('')}
+    <div class="bub them">👨‍💼 ${t.say}</div></div>
+    ${t.expect ? micWidget() + `<p class="hint">Gợi ý: ${t.hint}</p>` : '<div class="spacer"></div><button class="b1" id="n">Hoàn thành 🎉</button>'}`;
+    speak(t.say);
+    if (t.expect) wireMic(t.expect, () => { log.push({ who: 'them', text: '👨‍💼 ' + t.say }, { who: 'me', text: '👩‍💼 ' + t.hint });
+      store.set('_log', log); xp += 15; si++; render(); });
+    else $('#n').onclick = () => { store.set('_log', []); go(); };
+    return; }
+  if (s === 'done') {
+    const today = new Date().toDateString(), last = store.get('lastDay', '');
+    if (last !== today) { store.set('streak', store.get('streak', 0) + 1); store.set('lastDay', today); }
+    const reward = ['🎁 XP x2!', '🌸 Sticker hoa sen', '🪴 Cây cảnh cho văn phòng', '🏅 Huy hiệu "Lời chào đầu tiên"'][Math.floor(Math.random() * 4)];
+    if (reward.includes('x2')) xp *= 2;
+    app.innerHTML = `${bar()}<div class="spacer"></div><div class="big">🏆</div><h1 class="center">Xuất sắc, Elizabeth!</h1>
+    <p class="center">Chị vừa tự giới thiệu với khách Nhật bằng tiếng Anh.</p>
+    <div class="card center"><div>Mở rương thưởng:</div><div class="en">${reward}</div><div>Tổng: ⭐ ${xp} XP · 🔥 ${store.get('streak', 0)} ngày</div></div>
+    <div class="card"><b>Ngày mai:</b> anh Tanaka hỏi về nhà máy ở Thái Bình… 👀</div><div class="spacer"></div>
+    <button class="b2" id="again">Học lại bài này</button>`;
+    confetti(); $('#again').onclick = () => { step = 0; xp = 0; combo = 0; render(); };
+    return; }
+  $('#n') && ($('#n').onclick = go);
+}
+render();
+</script></body></html>
